@@ -5,39 +5,31 @@ import subprocess
 import cv2 as cv
 import numpy as np
 
-from src.framework.IClass import IClass
-from src.logger.CLogger import CLogger
 
-
-class CCamera(IClass):
+class Camera:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    local_path = current_dir + "/../../images/"
+    local_path = current_dir + "/images/"
 
     def __init__(self, image_path=local_path):
         self.path = image_path
-        self.ssh_username = "remote-pi-username"
-        self.ssh_password = "remote-pi-password"
-        self.ssh_hostname = "remote-pi-ipaddress"
-
-        IClass.__init__(self)
 
     def find_circles(
         self,
         image: str,
-        min_radius: float,
-        max_radius: float,
+        min_diameter: float,
+        max_diameter: float,
         min_dist: float,
         param1: int,
         param2: int,
         distance_mm_from_camera: float,
-        method_dp: int = 1.5,
+        method_dp: float = 1.5,
     ) -> tuple:
         """_summary_
 
         Args:
             image (string): name of image to be analysed
-            min_radius (float): minimum radius of circle to be found in mm
-            max_radius (float): maximum radius of circle to be found in mm
+            min_diameter (float): minimum diameter of circle to be found in mm
+            min_diameter (float): maximum diameter of circle to be found in mm
             min_dist (float): minimum distance between circles in mm
             params1 (int): Hough circle detection parameter 1 (see OpenCV docs)
             params2 (int): Hough circle detection parameter 2 (see OpenCV docs)
@@ -50,7 +42,6 @@ class CCamera(IClass):
             Center List contains the center coordinates of all circles found.
             is_found is a boolean indicating whether any circles were found.
         """
-        self._logger.info()
         # read the image path + image name
         img = cv.imread(self.path + image + ".jpg")
 
@@ -76,8 +67,8 @@ class CCamera(IClass):
             int(min_dist * (self.calculate_pixel_to_mm(distance_mm_from_camera))),
             param1=param1,
             param2=param2,
-            minRadius=int(min_radius * (self.calculate_pixel_to_mm(distance_mm_from_camera)) * 0.5),
-            maxRadius=int(max_radius * (self.calculate_pixel_to_mm(distance_mm_from_camera)) * 0.5),
+            minRadius=int(min_diameter * (self.calculate_pixel_to_mm(distance_mm_from_camera)) * 0.5),
+            maxRadius=int(max_diameter * (self.calculate_pixel_to_mm(distance_mm_from_camera)) * 0.5),
         )
 
         # Overlay circles on image and find center pixel, highlight center pixel in cyan
@@ -88,7 +79,7 @@ class CCamera(IClass):
             # convert the (x, y) coordinates and radius of the circles to integers
             circles = np.round(circles[0, :]).astype("int")
             # loop over the (x, y) coordinates and radius of the circles
-            for (x, y, r) in circles:
+            for x, y, r in circles:
                 # draw the circle in the output image, then draw a rectangle
                 # corresponding to the center of the circle
                 cv.circle(img, (x, y), r, (0, 255, 0), 4)
@@ -115,11 +106,8 @@ class CCamera(IClass):
                     (0, 0, 255),
                     2,
                 )
-            # print(f"center: {center}, radius: {radius}")
-            self._logger.log(CLogger.ELevel.INFO, f"center: {center}, radius: {radius}")
         else:
             print("No circles found")
-            self._logger.error("No circles found")
             return 0, 0, 0, False
 
         # find the center of the image
@@ -210,57 +198,6 @@ class CCamera(IClass):
         y_dist_mm = y_dist / pixel_to_mm
         return x_dist_mm, y_dist_mm
 
-    def take_picture(self, name: str = "tst_img", focus_distance_mm: float = 173):
-        """Take a picture with the camera."""
-        focal_offset_mm = 29.3  # offset at 173mm away from the camera
-        calibration_height_mm = 173  # height of the camera when calibrated
-        calibration_factor = -0.46512  # calibration factor
-        # using Y = mx + b
-        offset = ((calibration_height_mm - focus_distance_mm) * calibration_factor) + focal_offset_mm
-        print(f"offset: {offset}")
-        focal_meter = (focus_distance_mm - offset) / 1000
-
-        # self.pixel_to_mm = self.calculate_pixel_to_mm(focus_distance_mm)
-        # Run the snapshot.sh command to take a picture and save it to the path
-        try:
-            # current working directory is the same as the script
-            script_dir = os.path.dirname(__file__)
-            result = subprocess.run(f"{script_dir}/snapshot.sh {name} {self.path + name} {focal_meter}", shell=True)
-            print(result)
-            return True
-        except subprocess.CalledProcessError as e:
-            print(e)
-            self.take_picture(name)
-
-    def convert_to_grayscale(self, image: str):
-        # saves in more memory efficient format for opencv to read
-        img = cv.imread(f"{self.path}{image}.jpg")
-
-        # Convert to grayscale
-        img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-        # Save the grayscale image
-        cv.imwrite(f"{self.path}{image}_grayscale.jpg", img)
-
-    def png_to_jpg_convert(self, image: str):
-        # convert png to jpg
-        img = cv.imread(f"{self.path}{image}.png")
-        cv.imwrite(f"{self.path}{image}.jpg", img)
-
-    def reduce_quality(self, image: str, quality: int = 25):
-        # reduce the quality of the image to save space
-        img = cv.imread(f"{self.path}{image}.jpg")
-        cv.imwrite(f"{self.path}{image}_rq.jpg", img, [int(cv.IMWRITE_JPEG_QUALITY), quality])
-
-    def reduce_image_size(self, image: str, scale_percent: int = 25):
-        # reduce the size of the image to save space
-        img = cv.imread(f"{self.path}{image}.jpg")
-        width = int(img.shape[1] * scale_percent / 100)
-        height = int(img.shape[0] * scale_percent / 100)
-        dim = (width, height)
-        resized = cv.resize(img, dim, interpolation=cv.INTER_AREA)
-        cv.imwrite(f"{self.path}{image}_rs.jpg", resized)
-
     def calculate_pixel_to_mm(self, focus_distance_mm: float) -> float:
         # focus_distance_mm in mm is the distance from the camera to the object
 
@@ -270,6 +207,4 @@ class CCamera(IClass):
 
         # using Y = mx + b
         pixel_mm_converter = ((focus_distance_mm - calibration_height_mm) * calibration_factor) + constant_pixel_mm
-        print(f"pixel_mm_converter: {pixel_mm_converter}")
-        self._logger.info(f"pixel_mm_converter: {pixel_mm_converter}")
         return pixel_mm_converter
