@@ -29,7 +29,7 @@ class Camera:
         Args:
             image (string): name of image to be analysed
             min_diameter (float): minimum diameter of circle to be found in mm
-            min_diameter (float): maximum diameter of circle to be found in mm
+            max_diameter (float): maximum diameter of circle to be found in mm
             min_dist (float): minimum distance between circles in mm
             params1 (int): Hough circle detection parameter 1 (see OpenCV docs)
             params2 (int): Hough circle detection parameter 2 (see OpenCV docs)
